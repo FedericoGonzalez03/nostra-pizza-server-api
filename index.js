@@ -3,6 +3,9 @@ import pg from 'pg';
 const { Pool } = pg;
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import https from 'https';
+import http from 'http';
 
 dotenv.config();
 
@@ -12,63 +15,20 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json({limit: '50mb'}));
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+const options = {
+    key: fs.readFileSync(process.env.KEY_PATH),
+    cert: fs.readFileSync(process.env.CERT_PATH),
+    passphrase: process.env.KEY_PASS,
+};
+
+https.createServer(options, app).listen(443, () => {
+    console.log(`Server is running on port ${443}`);
 });
 
-/*
-const params = [
-    {
-        id: 1,
-        cedula: "53769841",
-        nombre: "Federico González",
-        email: "fedegonzalez@bcu.gub.uy",
-        tipo_pago: 1,
-        costo: 1,
-        detalle: "Pago de servicios",
-    },
-    {
-        id: 2,
-        cedula: "53769841",
-        nombre: "Federico González",
-        email: "fedegonzalez@bcu.gub.uy",
-        tipo_pago: 2,
-        costo: 1321.48,
-        detalle: "Pago viaje a Miami",
-    },
-    {
-        id: 3,
-        cedula: "53769841",
-        nombre: "Federico González",
-        email: "fedegonzalez@bcu.gub.uy",
-        tipo_pago: 1,
-        costo: 3,
-        detalle: "Pago de servicios a ANTEL",
-    },
-    {
-        id: 4,
-        cedula: "53769841",
-        nombre: "Federico González",
-        email: "fedegonzalez@bcu.gub.uy",
-        tipo_pago: 2,
-        costo: 102,
-        detalle: "Pago de viaje a Buenos Aires",
-    },
-];
-
-app.get('/params', (req, res) => {
-    const id_solicitud = req.query.id_solicitud;
-    console.log("Se recibió el siguiente request: " + id_solicitud);
-    const param = params.find(param => param.id == id_solicitud);
-    res.json(param);
-});
-
-app.post('/status', (req, res) => {
-    console.log("Se recibió el siguiente estado: " + req.body.status);
-    res.sendStatus(200);
-});
-
-*/
+http.createServer((req, res) => {
+    res.writeHead(301, { Location: `https://${req.headers.host}${req.url}` });
+    res.end();
+}).listen(80);
 
 const pool = new Pool({
     host: process.env.DB_HOST,
@@ -87,6 +47,7 @@ pool.connect((err, client, release) => {
     } else {
         console.log('Conectado a PostgreSQL');
     }
+    release();
 });
 
 
