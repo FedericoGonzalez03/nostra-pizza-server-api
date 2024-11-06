@@ -2,6 +2,9 @@ import express from 'express';
 import pg from 'pg';
 const { Pool } = pg;
 import cors from 'cors';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 const PORT = 3000;
@@ -68,11 +71,14 @@ app.post('/status', (req, res) => {
 */
 
 const pool = new Pool({
-    host: 'localhost',
-    port: 5432,
-    database: 'nostrapizza',
-    user: 'nostrapizza',
-    password: 'nostrapizza',
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    ssl: {
+      rejectUnauthorized: false, 
+    },
 });
 
 pool.connect((err, client, release) => {
