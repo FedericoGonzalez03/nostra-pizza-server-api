@@ -10,8 +10,6 @@ import http from 'http';
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
-
 app.use(cors());
 app.use(express.json({limit: '50mb'}));
 
