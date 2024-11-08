@@ -3,30 +3,14 @@ import pg from 'pg';
 const { Pool } = pg;
 import cors from 'cors';
 import dotenv from 'dotenv';
-import fs from 'fs';
-import https from 'https';
-import http from 'http';
 
 dotenv.config();
+
+const PORT = process.env.PORT || 3000;
 
 const app = express();
 app.use(cors());
 app.use(express.json({limit: '50mb'}));
-
-const options = {
-    key: fs.readFileSync(process.env.KEY_PATH),
-    cert: fs.readFileSync(process.env.CERT_PATH),
-    passphrase: process.env.KEY_PASS,
-};
-
-https.createServer(options, app).listen(443, () => {
-    console.log(`Server is running on port ${443}`);
-});
-
-http.createServer((req, res) => {
-    res.writeHead(301, { Location: `https://${req.headers.host}${req.url}` });
-    res.end();
-}).listen(80);
 
 const pool = new Pool({
     host: process.env.DB_HOST,
@@ -48,11 +32,13 @@ pool.connect((err, client, release) => {
     release();
 });
 
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
 
 app.get('/menu', async (req, res) => {
     try {
         const search = req.query.search ?? '';
-        console.log('Buscando:', search);
         const result = await pool.query('SELECT * FROM menu WHERE upper(name) ILIKE $1 OR upper(description) ILIKE $1', [`%${search.toUpperCase()}%`]);
         res.status(200).json(result.rows);
     } catch (err) {
@@ -82,7 +68,7 @@ app.get('/flavours/:id', async (req, res) => {
 app.post('/menu', async (req, res) => {
     try {
         const { name, description, price, available, image } = req.body;
-        await pool.query('INSERT INTO menu (name, description, price, available, image) VALUES ($1, $2, $3, $4, $5)', [name, description, price, available, image]);
+        await pool.query('INSERT INTO menu (name, description, price, available, image, created_at) VALUES ($1, $2, $3, $4, $5, $6)', [name, description, price, available, image, new Date()]);
         res.status(201).json({ success: true });
     } catch (err) {
         console.error('Error al agregar un producto al menú', req.body, err);
