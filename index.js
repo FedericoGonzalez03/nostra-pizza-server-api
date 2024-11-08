@@ -3,6 +3,8 @@ import pg from 'pg';
 const { Pool } = pg;
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import https from 'https';
 
 dotenv.config();
 
@@ -10,7 +12,8 @@ const PORT = process.env.PORT || 3000;
 
 const app = express();
 app.use(cors());
-app.use(express.json({limit: '50mb'}));
+app.disable('x-powered-by');
+app.use(express.json({ limit: '50mb' }));
 
 const pool = new Pool({
     host: process.env.DB_HOST,
@@ -19,7 +22,7 @@ const pool = new Pool({
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     ssl: {
-      rejectUnauthorized: false, 
+        rejectUnauthorized: false,
     },
 });
 
@@ -32,8 +35,14 @@ pool.connect((err, client, release) => {
     release();
 });
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+const httpsOptions = {
+    key: fs.readFileSync(process.env.KEY_PATH),
+    cert: fs.readFileSync(process.env.CERT_PATH),
+    passphrase: process.env.KEY_PASS,
+};
+
+https.createServer(httpsOptions, app).listen(PORT, () => {
+    console.log('HTTPS server listening on port ' + PORT);
 });
 
 app.get('/menu', async (req, res) => {
