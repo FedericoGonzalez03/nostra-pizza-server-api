@@ -45,13 +45,13 @@ const httpsOptions = {
     passphrase: process.env.KEY_PASS,
 };
 
-// https.createServer(httpsOptions, app).listen(PORT, '0.0.0.0', () => {
-//     console.log('HTTPS server listening on port ' + PORT);
-// });
-
-http.createServer(app).listen(PORT, '0.0.0.0', () => {
-    console.log('HTTP server listening on port ' + PORT);
+https.createServer(httpsOptions, app).listen(PORT, '0.0.0.0', () => {
+    console.log('HTTPS server listening on port ' + PORT);
 });
+
+// http.createServer(app).listen(PORT, '0.0.0.0', () => {
+//     console.log('HTTP server listening on port ' + PORT);
+// });
 
 // app.listen(PORT, () => {
 //     console.log('Server listening on port ' + PORT);
