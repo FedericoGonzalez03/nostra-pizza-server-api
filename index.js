@@ -6,10 +6,13 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import https from 'https';
 import http from 'http';
+import { MercadoPagoConfig, Preference } from 'mercadopago';
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3000;
+const mercadopago = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
+
+const PORT = process.env.LISTEN_PORT || 3000;
 
 const app = express();
 app.use(cors());
@@ -42,22 +45,22 @@ const httpsOptions = {
     passphrase: process.env.KEY_PASS,
 };
 
-https.createServer(httpsOptions, app).listen(PORT, () => {
-    console.log('HTTPS server listening on port ' + PORT);
-});
-
-// http.createServer(app).listen(PORT, () => {
-//     console.log('HTTP server listening on port ' + PORT);
+// https.createServer(httpsOptions, app).listen(PORT, '0.0.0.0', () => {
+//     console.log('HTTPS server listening on port ' + PORT);
 // });
 
-app.listen(PORT, () => {
-    console.log('Server listening on port ' + PORT);
+http.createServer(app).listen(PORT, '0.0.0.0', () => {
+    console.log('HTTP server listening on port ' + PORT);
 });
+
+// app.listen(PORT, () => {
+//     console.log('Server listening on port ' + PORT);
+// });
 
 app.get('/menu', async (req, res) => {
     try {
         const search = req.query.search ?? '';
-        const result = await pool.query('SELECT *, \'12\' AS prueba FROM menu WHERE upper(name) ILIKE $1 OR upper(description) ILIKE $1', [`%${search.toUpperCase()}%`]);
+        const result = await pool.query('SELECT * FROM menu WHERE upper(name) ILIKE $1 OR upper(description) ILIKE $1', [`%${search.toUpperCase()}%`]);
         res.status(200).json(result.rows);
     } catch (err) {
         console.error('Error al obtener el menú', err);
@@ -231,5 +234,155 @@ app.put('/menu/flavours/:id', async (req, res) => {
     } catch (err) {
         console.error('Error al actualizar el gusto del menú', req.body, err);
         res.status(500).send('Error al actualizar el gusto del menú');
+    }
+});
+
+app.post('/orders', async (req, res) => {
+    try {
+        const { customer_name, customer_phone, customer_address, order } = req.body;
+        const result = await pool.query('INSERT INTO orders (customer_name, customer_phone, customer_address, order, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING id', [customer_name, customer_phone, customer_address, order, new Date()]);
+        res.status(201).json({ id: result.rows[0].id });
+    } catch (err) {
+        console.error('Error al agregar un pedido', req.body, err);
+        res.status(500).send('Error al agregar el pedido');
+    }
+});
+
+app.get('/orders', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM orders');
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error al obtener los pedidos', err);
+        res.status(500).send('Error al obtener los pedidos');
+    }
+});
+
+app.get('/orders/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const result = await pool.query('SELECT * FROM orders WHERE id = $1', [id]);
+        res.status(200).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error al obtener el pedido', err);
+        res.status(500).send('Error al obtener el pedido');
+    }
+});
+
+app.put('/orders/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { status } = req.body;
+        await pool.query('UPDATE orders SET status = $1 WHERE id = $2', [status, id]);
+        res.status(200).json({ success: true });
+    } catch (err) {
+        console.error('Error al actualizar el pedido', req.body, err);
+        res.status(500).send('Error al actualizar el pedido');
+    }
+});
+
+app.delete('/orders/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        await pool.query('DELETE FROM orders WHERE id = $1', [id]);
+        res.status(200).json({ success: true });
+    } catch (err) {
+        console.error('Error al eliminar un pedido', err);
+        res.status(500).send('Error al eliminar el pedido');
+    }
+});
+
+app.post('/checkout/mp', async (req, res) => {
+    try {
+        const { items } = req.body;
+        const preference = new Preference(mercadopago);
+        const preferenceData = {
+            items: items.map((item) => {
+                return {
+                    title: item.name,
+                    quantity: item.quantity,
+                    unit_price: item.price,
+                };
+            }),
+            back_urls: {
+                success: `${process.env.APP_DEEP_LINK_HOST}/success`,
+                pending: `${process.env.APP_DEEP_LINK_HOST}/pending`,
+                failure: `${process.env.APP_DEEP_LINK_HOST}/failure`,
+            },
+            auto_return: 'approved',
+        };
+        console.log(preferenceData);
+        const response = await preference.create({ body: preferenceData });
+        console.log('Preference', response);
+        res.json({ id: response.id });
+    } catch (err) {
+        res.status(500).send('Error al crear la preferencia ' + JSON.stringify(err));
+    }
+});
+
+app.post('/checkout/dlocal', async (req, res) => {
+    try {
+        const { amount } = req.body;
+        const response = await fetch('https://api-sbx.dlocalgo.com/v1/payments', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.DLOCAL_API_KEY}:${process.env.DLOCAL_SECRET_KEY}`,
+            },
+            body: JSON.stringify({
+                description: 'Pedido Nostra Pizza',
+                amount,
+                currency: 'UYU',
+                country: 'UY',
+                notification_url: process.env.THIS_SERVER_URL + '/checkout/dlocal/webhook',
+            }),
+        });
+        const data = await response.json();
+        if (data.code) {
+            throw new Error(data);
+        }
+        console.log('Payment', data);
+        res.json({ id: data.id, url: data.redirect_url });
+    } catch (err) {
+        res.status(500).send('Error al crear el pago' + JSON.stringify(err));
+    }
+});
+
+app.post('/checkout/mp/webhook', async (req, res) => {
+    console.log('Webhook MP', req.body);
+    try {
+        const { body } = req;
+        console.log('Webhook MP', body);
+        res.status(200).send('OK');
+    } catch (err) {
+        console.error('Error al procesar el webhook', req.body, err);
+        res.status(500).send('Error al procesar el webhook');
+    }
+});
+
+
+app.post('/checkout/dlocal/webhook', async (req, res) => {
+    console.log('Webhook DLocal', req.body);
+    try {
+        const { payment_id } = req.body;
+        const response = await fetch(
+            `https://api-sbx.dlocalgo.com/v1/payments/:payment_id${payment_id}`,
+            {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.DLOCAL_API_KEY}:${process.env.DLOCAL_SECRET_KEY}`,
+                },
+            }
+        );
+        const data = await response.json();
+        if (data.code) {
+            throw new Error(data);
+        }
+        console.log('Webhook DLocal', data);
+        res.status(200).send('OK');
+    } catch (err) {
+        console.error('Error al procesar el webhook', req.body, err);
+        res.status(500).send('Error');
     }
 });
