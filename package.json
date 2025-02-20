@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@vercel/node": "^5.1.7",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -16,7 +17,8 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js"
+    "start": "node index.js",
+    "tunnel": "C:\\Development\\ngrok start --all"
   },
   "author": "",
   "license": "ISC",

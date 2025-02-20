@@ -25,17 +25,22 @@ const pool = new Pool({
     database: process.env.DB_NAME,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    // ssl: {
-    //     rejectUnauthorized: false,
-    // },
+    ssl: {
+        rejectUnauthorized: process.env.DB_REJECT_UNAUTHORIZED === 'true',
+        ca: fs.readFileSync(process.env.DB_CA_PATH).toString() ?? null,
+    },
 });
 
 pool.connect((err, client, release) => {
     if (err) {
         logger.error('Error al conectar a la base de datos', err);
-    } else {
-        logger.info('Conectado a PostgreSQL');
+        throw err;
     }
+    client.query("SELECT VERSION()", [], function (err, result) {
+        if (err) throw err;
+        logger.info(result.rows[0].version);
+    });
+    logger.info('Conectado a PostgreSQL');
     release();
 });
 
